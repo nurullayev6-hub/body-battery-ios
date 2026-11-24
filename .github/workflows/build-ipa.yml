@@ -1,0 +1,71 @@
+name: Build IPA
+
+# Собирает неподписанный .ipa для установки через Sideloadly (бесплатный Apple ID).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app || sudo xcode-select -s "$(ls -d /Applications/Xcode_16*.app | sort -V | tail -1)"
+
+      - name: Generate project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild -project Rezerv.xcodeproj -scheme Rezerv -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build | tee build.log | grep -E "error|warning: .*Rezerv|BUILD" || true
+          test -d build/Build/Products/Release-iphoneos/Rezerv.app
+
+      - name: Package IPA (with entitlements)
+        run: |
+          APP=build/Build/Products/Release-iphoneos/Rezerv.app
+          for variant in full basic; do
+            rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
+            if [ "$variant" = full ]; then ENT=Rezerv/Resources/Rezerv.entitlements; NAME=Rezerv.ipa
+            else ENT=ci/basic.entitlements; NAME=Rezerv-basic.ipa; fi
+            # ad-hoc подпись только для того, чтобы Sideloadly увидел нужные права (HealthKit)
+            codesign --force --sign - --entitlements "$ENT" Payload/Rezerv.app
+            zip -qry "$NAME" Payload
+          done
+          ls -la *.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Rezerv-ipa
+          path: |
+            Rezerv.ipa
+            Rezerv-basic.ipa
+          retention-days: 30
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Резерв, сборка ${{ github.run_number }}
+          body: Скачайте Rezerv.ipa и установите через Sideloadly. Если установка ругается на права, возьмите Rezerv-basic.ipa (без фоновой синхронизации).
+          files: |
+            Rezerv.ipa
+            Rezerv-basic.ipa
+          make_latest: true
+
+      - name: Show build errors
+        if: failure()
+        run: grep -E "error:" -A3 build.log | head -100 || true
