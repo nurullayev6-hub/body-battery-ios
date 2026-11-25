@@ -43,6 +43,8 @@ struct SettingsView: View {
                     Text("Значения берутся из Здоровья автоматически. Пустое поле — автоматическое значение. Если знаете свой максимальный пульс по тесту, впишите его: от него зависят зоны и VO2max.")
                 }
 
+                AnalysisSyncSection()
+
                 Section("Синхронизация") {
                     Toggle("Уведомлять при резерве ниже 25", isOn: $model.lowAlert)
                     Button("Обновить сейчас") { Task { await model.refresh() } }
@@ -75,5 +77,58 @@ struct SettingsView: View {
                 restHR = model.overrideRestingHR > 0 ? "\(Int(model.overrideRestingHR))" : ""
             }
         }
+    }
+}
+
+/// Отправка данных для анализа: закрытый репозиторий GitHub + ручной файл
+struct AnalysisSyncSection: View {
+    @EnvironmentObject var model: AppModel
+    @State private var repo = GitHubSync.repo
+    @State private var token = ""
+    @State private var auto = GitHubSync.auto
+    @State private var busy = false
+    @State private var note = ""
+    @State private var shareURL: URL?
+
+    var body: some View {
+        Section {
+            TextField("владелец/репозиторий", text: $repo)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+            SecureField(GitHubSync.token == nil ? "Токен GitHub" : "Токен сохранён, ввести новый", text: $token)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+            Toggle("Отправлять автоматически", isOn: $auto)
+                .onChange(of: auto) { _, v in GitHubSync.auto = v }
+            Button("Сохранить и отправить сейчас") {
+                GitHubSync.repo = repo
+                if !token.isEmpty { GitHubSync.setToken(token); token = "" }
+                run { await GitHubSync.sync(model, force: true); note = GitHubSync.status }
+            }
+            .disabled(busy || repo.isEmpty)
+            Button("Отправить историю за 90 дней") {
+                run { await GitHubSync.backfill(model) { note = $0 } }
+            }
+            .disabled(busy || !GitHubSync.isConfigured)
+            if busy { HStack { ProgressView(); Text(note.isEmpty ? "Отправляю…" : note).font(.footnote) } }
+            else if !note.isEmpty || !GitHubSync.status.isEmpty {
+                Text(note.isEmpty ? GitHubSync.status : note).font(.footnote).foregroundStyle(.secondary)
+            }
+            if let t = GitHubSync.lastSync { LabeledContent("Последняя отправка", value: Fmt.time(t)) }
+            if let url = shareURL {
+                ShareLink(item: url) { Label("Поделиться файлом за 7 дней", systemImage: "square.and.arrow.up") }
+            } else {
+                Button { shareURL = AnalysisExport.fileURL(model) } label: {
+                    Label("Подготовить файл за 7 дней", systemImage: "doc.badge.arrow.up")
+                }
+            }
+        } header: {
+            Text("Данные для анализа")
+        } footer: {
+            Text("Резерв сам отправляет сводку и 5-минутные данные за 7 дней в ваш закрытый репозиторий GitHub, откуда их читает Claude. Токен хранится в Связке ключей iPhone и уходит только на api.github.com. В открытый репозиторий отправка запрещена.")
+        }
+    }
+
+    private func run(_ work: @escaping () async -> Void) {
+        busy = true; note = ""
+        Task { await work(); busy = false }
     }
 }

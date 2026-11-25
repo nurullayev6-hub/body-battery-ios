@@ -99,6 +99,7 @@ final class AppModel: ObservableObject {
             lastSync = now
             state = .ready
             if background { notifyIfLow() }
+            await GitHubSync.sync(self)
         } catch {
             if raw == nil { state = .failed(error.localizedDescription) }
         }
