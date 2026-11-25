@@ -20,6 +20,26 @@
 
 Если Sideloadly пишет об ошибке прав (entitlements), установите `Rezerv-basic.ipa`: в нём нет фоновой синхронизации, данные обновляются при открытии приложения.
 
+## TestFlight (платный аккаунт Apple Developer, Mac не нужен)
+
+Один раз, всё в браузере:
+
+1. Оформите [Apple Developer Program](https://developer.apple.com/programs/enroll/) (99 $ в год) и дождитесь письма об активации.
+2. **Team ID:** developer.apple.com → Account → Membership details → Team ID.
+3. **App ID с HealthKit:** developer.apple.com → Certificates, IDs & Profiles → Identifiers → «+» → App IDs → App. Description: `Rezerv`, Bundle ID (Explicit): например `com.hasan.rezerv`. В списке Capabilities отметьте **HealthKit** → Continue → Register.
+4. **Приложение в App Store Connect:** [appstoreconnect.apple.com](https://appstoreconnect.apple.com) → Приложения → «+» → Новое приложение: iOS, название `Резерв` (если занято, любое другое), язык Русский, Bundle ID из шага 3, SKU `rezerv`, доступ Полный.
+5. **Ключ API:** App Store Connect → Пользователи и доступ → Интеграции → App Store Connect API → «+». Имя `GitHub`, доступ **Admin**. Скачайте файл `AuthKey_XXXX.p8` (скачать можно только один раз). Запишите **Key ID** и **Issuer ID** со страницы.
+6. **Секреты в GitHub:** репозиторий → Settings → Secrets and variables → Actions → New repository secret. Пять секретов:
+   - `APPLE_TEAM_ID` — из шага 2
+   - `BUNDLE_ID` — из шага 3
+   - `ASC_KEY_ID` — Key ID
+   - `ASC_ISSUER_ID` — Issuer ID
+   - `ASC_KEY_P8` — откройте `.p8` в Блокноте и вставьте весь текст, включая строки BEGIN и END
+7. Запустите сборку: вкладка Actions → TestFlight → Run workflow. Через 15–30 минут сборка появится в App Store Connect → TestFlight.
+8. В App Store Connect → TestFlight → Внутреннее тестирование добавьте себя тестировщиком. На iPhone поставьте приложение **TestFlight** из App Store и установите «Резерв» оттуда.
+
+Дальше каждое изменение кода само уходит в TestFlight. Сборка в TestFlight живёт 90 дней, новые приходят автоматически.
+
 ## Сборка на Mac (если появится)
 
 ```

@@ -37,3 +37,4 @@ targets:
         UIBackgroundModes: [fetch, processing]
         BGTaskSchedulerPermittedIdentifiers: [app.rezerv.refresh]
         UIRequiredDeviceCapabilities: [healthkit]
+        ITSAppUsesNonExemptEncryption: false
